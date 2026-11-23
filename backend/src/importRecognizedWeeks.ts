@@ -9,13 +9,11 @@ const DB_FILE = path.resolve(__dirname, '../data/attendance-db.json');
 
 const prisma = new PrismaClient();
 
-// Definition of a lesson in a day
 interface DayLessonDef {
   lessonNumber: number;
   subjectId: number;
 }
 
-// Map of date string to its lessons
 const DAY_LESSONS: Record<string, DayLessonDef[]> = {
   // Week 1: 07.09.2026 - 11.09.2026 (Week 2 of schedule)
   '2026-09-07': [
@@ -130,7 +128,7 @@ const DAY_LESSONS: Record<string, DayLessonDef[]> = {
     { lessonNumber: 4, subjectId: 4 },
     { lessonNumber: 5, subjectId: 4 },
   ],
-  // 2026-11-04 is a national holiday (no lessons)
+  // 04.11 is a national holiday
   '2026-11-06': [
     { lessonNumber: 1, subjectId: 3 },
     { lessonNumber: 2, subjectId: 7 },
@@ -163,18 +161,16 @@ const DAY_LESSONS: Record<string, DayLessonDef[]> = {
   ],
 };
 
-// Absences per date: studentId -> array of statuses corresponding to each lesson in order
-// If absent for all lessons: 'ALL_2'
-// If empty for student: default is all 'PRESENT'
-type StudentDayMarks = Record<number, (AttendanceStatus | 'ALL_2' | 'ALL_PRESENT')[] | 'ALL_2'>;
+type StudentDayMarks = Record<number, (AttendanceStatus | 'ALL_2')[] | 'ALL_2'>;
 
 const DAY_ABSENCES: Record<string, StudentDayMarks> = {
-  // --- WEEK 1: 07.09.2026 - 11.09.2026 ---
+  // === WEEK 1: 07.09.2026 - 11.09.2026 (Photo 3) ===
   '2026-09-07': {
-    1: 'ALL_2',
-    3: 'ALL_2',
-    5: 'ALL_2',
+    1: [AttendanceStatus.ABSENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT],
+    2: 'ALL_2',
+    4: 'ALL_2',
     6: 'ALL_2',
+    7: 'ALL_2',
     9: 'ALL_2',
     11: 'ALL_2',
     14: 'ALL_2',
@@ -189,11 +185,13 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
   '2026-09-08': {
-    1: 'ALL_2',
+    1: [AttendanceStatus.HALF_ABSENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT],
+    2: 'ALL_2',
     3: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
     5: 'ALL_2',
     6: 'ALL_2',
-    9: 'ALL_2',
+    7: 'ALL_2',
+    8: 'ALL_2',
     11: 'ALL_2',
     15: 'ALL_2',
     21: 'ALL_2',
@@ -202,11 +200,12 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
   '2026-09-09': {
-    1: 'ALL_2',
+    2: 'ALL_2',
     3: 'ALL_2',
     5: 'ALL_2',
     6: 'ALL_2',
-    9: 'ALL_2',
+    7: 'ALL_2',
+    8: 'ALL_2',
     11: 'ALL_2',
     15: 'ALL_2',
     21: 'ALL_2',
@@ -215,7 +214,7 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
   '2026-09-11': {
-    1: 'ALL_2',
+    2: 'ALL_2',
     6: 'ALL_2',
     7: 'ALL_2',
     9: 'ALL_2',
@@ -227,10 +226,9 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
 
-  // --- WEEK 2: 12.10.2026 - 16.10.2026 ---
+  // === WEEK 2: 12.10.2026 - 16.10.2026 (Photo 7) ===
   '2026-10-12': {
-    1: 'ALL_2',
-    3: 'ALL_2',
+    2: 'ALL_2',
     4: 'ALL_2',
     5: 'ALL_2',
     6: 'ALL_2',
@@ -248,10 +246,9 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
   '2026-10-13': {
-    1: 'ALL_2',
+    1: [AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.ABSENT],
     2: 'ALL_2',
     3: 'ALL_2',
-    5: 'ALL_2',
     6: 'ALL_2',
     7: 'ALL_2',
     8: 'ALL_2',
@@ -260,7 +257,6 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     14: 'ALL_2',
     15: 'ALL_2',
     17: 'ALL_2',
-    18: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT],
     20: 'ALL_2',
     21: 'ALL_2',
     22: 'ALL_2',
@@ -271,7 +267,6 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     1: 'ALL_2',
     3: 'ALL_2',
     4: 'ALL_2',
-    5: 'ALL_2',
     6: 'ALL_2',
     7: 'ALL_2',
     8: 'ALL_2',
@@ -279,38 +274,37 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     11: 'ALL_2',
     14: 'ALL_2',
     15: 'ALL_2',
+    16: [AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
     17: 'ALL_2',
+    18: [AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
     21: 'ALL_2',
     22: 'ALL_2',
     24: 'ALL_2',
     25: 'ALL_2',
   },
   '2026-10-16': {
-    1: 'ALL_2',
-    2: 'ALL_2',
-    3: 'ALL_2',
-    4: 'ALL_2',
-    5: 'ALL_2',
-    6: 'ALL_2',
-    7: 'ALL_2',
-    8: 'ALL_2',
-    9: 'ALL_2',
-    11: 'ALL_2',
-    14: 'ALL_2',
-    15: 'ALL_2',
-    17: 'ALL_2',
-    18: 'ALL_2',
-    19: 'ALL_2',
-    20: 'ALL_2',
-    21: 'ALL_2',
-    22: 'ALL_2',
-    24: 'ALL_2',
-    25: 'ALL_2',
+    2: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    3: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    4: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    5: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    6: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    7: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    8: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    9: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    11: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    14: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    15: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    18: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    19: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    20: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    21: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    22: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    24: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    25: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
   },
 
-  // --- WEEK 3: 19.10.2026 - 23.10.2026 ---
+  // === WEEK 3: 19.10.2026 - 23.10.2026 (Photo 4) ===
   '2026-10-19': {
-    1: 'ALL_2',
     2: [AttendanceStatus.ABSENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT],
     3: 'ALL_2',
     4: 'ALL_2',
@@ -334,18 +328,18 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     26: [AttendanceStatus.ABSENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT],
   },
   '2026-10-20': {
-    1: 'ALL_2',
-    3: 'ALL_2',
+    2: 'ALL_2',
+    3: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.HALF_ABSENT, AttendanceStatus.ABSENT],
     4: 'ALL_2',
     5: 'ALL_2',
     6: 'ALL_2',
     7: [AttendanceStatus.ABSENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT],
-    9: 'ALL_2',
+    8: 'ALL_2',
     11: 'ALL_2',
     14: 'ALL_2',
     15: 'ALL_2',
     17: [AttendanceStatus.ABSENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT],
-    18: 'ALL_2',
+    18: [AttendanceStatus.ABSENT, AttendanceStatus.HALF_ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
     21: 'ALL_2',
     22: 'ALL_2',
     23: 'ALL_2',
@@ -353,12 +347,12 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
   '2026-10-21': {
-    1: 'ALL_2',
+    2: 'ALL_2',
     3: 'ALL_2',
     4: 'ALL_2',
     5: 'ALL_2',
     6: 'ALL_2',
-    9: 'ALL_2',
+    8: 'ALL_2',
     11: 'ALL_2',
     14: 'ALL_2',
     15: 'ALL_2',
@@ -370,7 +364,7 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
   '2026-10-23': {
-    1: 'ALL_2',
+    2: 'ALL_2',
     4: 'ALL_2',
     5: 'ALL_2',
     6: 'ALL_2',
@@ -380,6 +374,7 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     14: 'ALL_2',
     15: 'ALL_2',
     18: 'ALL_2',
+    20: 'ALL_2',
     21: 'ALL_2',
     22: 'ALL_2',
     23: 'ALL_2',
@@ -387,7 +382,7 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
 
-  // --- WEEK 4: 26.10.2026 - 30.10.2026 ---
+  // === WEEK 4: 26.10.2026 - 30.10.2026 (Photo 8) ===
   '2026-10-26': {
     4: [AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
     5: 'ALL_2',
@@ -410,34 +405,33 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
   },
   '2026-10-27': {
     1: [AttendanceStatus.ABSENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT],
-    2: 'ALL_2',
-    3: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
-    4: 'ALL_2',
-    5: 'ALL_2',
-    6: 'ALL_2',
-    7: 'ALL_2',
-    8: 'ALL_2',
-    9: 'ALL_2',
-    11: 'ALL_2',
-    14: 'ALL_2',
-    15: 'ALL_2',
-    17: 'ALL_2',
-    18: 'ALL_2',
-    20: 'ALL_2',
-    21: 'ALL_2',
-    22: 'ALL_2',
-    23: 'ALL_2',
-    24: 'ALL_2',
-    25: 'ALL_2',
+    2: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    3: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    4: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    5: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    6: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    7: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    8: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    11: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    14: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    15: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    16: [AttendanceStatus.ABSENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.PRESENT],
+    17: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    18: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    20: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    21: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    22: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    23: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    24: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    25: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
   },
   '2026-10-28': {
-    1: 'ALL_2',
     2: 'ALL_2',
     3: 'ALL_2',
     4: 'ALL_2',
     5: 'ALL_2',
     6: 'ALL_2',
-    9: 'ALL_2',
+    8: 'ALL_2',
     11: 'ALL_2',
     15: 'ALL_2',
     17: 'ALL_2',
@@ -450,7 +444,6 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
   '2026-10-30': {
-    1: 'ALL_2',
     2: 'ALL_2',
     3: 'ALL_2',
     4: 'ALL_2',
@@ -471,9 +464,8 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
 
-  // --- WEEK 5: 02.11.2026 - 06.11.2026 ---
+  // === WEEK 5: 02.11.2026 - 06.11.2026 (Photo 10) ===
   '2026-11-02': {
-    1: 'ALL_2',
     2: 'ALL_2',
     3: 'ALL_2',
     4: 'ALL_2',
@@ -495,7 +487,6 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
   '2026-11-03': {
-    1: 'ALL_2',
     2: 'ALL_2',
     3: 'ALL_2',
     4: 'ALL_2',
@@ -519,7 +510,7 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
   '2026-11-06': {
     2: 'ALL_2',
     3: 'ALL_2',
-    4: 'ALL_2',
+    4: [AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT, AttendanceStatus.ABSENT],
     5: 'ALL_2',
     6: 'ALL_2',
     7: 'ALL_2',
@@ -539,9 +530,8 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
 
-  // --- WEEK 6: 09.11.2026 - 13.11.2026 ---
+  // === WEEK 6: 09.11.2026 - 13.11.2026 (Photo 9) ===
   '2026-11-09': {
-    1: 'ALL_2',
     2: 'ALL_2',
     3: 'ALL_2',
     4: 'ALL_2',
@@ -564,14 +554,13 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     26: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT],
   },
   '2026-11-10': {
-    1: 'ALL_2',
-    2: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
-    3: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.PRESENT],
+    2: [AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    3: [AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    4: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
     5: 'ALL_2',
     6: 'ALL_2',
     7: 'ALL_2',
     8: 'ALL_2',
-    9: 'ALL_2',
     11: 'ALL_2',
     14: 'ALL_2',
     15: 'ALL_2',
@@ -586,17 +575,16 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
   },
   '2026-11-11': {
     2: 'ALL_2',
-    3: 'ALL_2',
+    3: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
     4: 'ALL_2',
     5: 'ALL_2',
     6: 'ALL_2',
     7: 'ALL_2',
     8: 'ALL_2',
-    9: 'ALL_2',
     11: 'ALL_2',
     14: 'ALL_2',
     15: 'ALL_2',
-    17: 'ALL_2',
+    17: [AttendanceStatus.ABSENT, AttendanceStatus.HALF_ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
     18: 'ALL_2',
     21: 'ALL_2',
     22: 'ALL_2',
@@ -605,7 +593,7 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
     25: 'ALL_2',
   },
   '2026-11-13': {
-    2: 'ALL_2',
+    2: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
     4: 'ALL_2',
     5: 'ALL_2',
     6: 'ALL_2',
@@ -632,32 +620,28 @@ async function main() {
   await prisma.$connect();
   console.log('Connected!');
 
-  // Fetch all students (1 to 26)
   const students = await prisma.student.findMany({ orderBy: { id: 'asc' } });
   console.log(`Found ${students.length} students in DB.`);
 
   let totalLessonsCreated = 0;
-  let totalAttendancesCreated = 0;
+  let totalAttendancesUpdated = 0;
 
-  // Read existing db.json to update it alongside Neon DB
   let dbJson: any = { students: [], subjects: [], lessons: [], attendances: [] };
   if (fs.existsSync(DB_FILE)) {
     dbJson = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
   }
 
-  // Iterate over all dates in DAY_LESSONS
   for (const [dateStr, lessonDefs] of Object.entries(DAY_LESSONS)) {
     const [year, month, day] = dateStr.split('-').map(Number);
     const dateObj = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 
-    console.log(`\n=== Processing date: ${dateStr} (${lessonDefs.length} lessons) ===`);
+    console.log(`Processing date: ${dateStr} (${lessonDefs.length} lessons)...`);
 
     const dayAbsences = DAY_ABSENCES[dateStr] || {};
 
     for (let idx = 0; idx < lessonDefs.length; idx++) {
       const def = lessonDefs[idx];
 
-      // Upsert lesson
       const lesson = await prisma.lesson.upsert({
         where: {
           date_subjectId_lessonNumber: {
@@ -675,7 +659,6 @@ async function main() {
       });
       totalLessonsCreated++;
 
-      // Also ensure lesson is in dbJson
       let jsonLesson = dbJson.lessons.find(
         (l: any) => l.date === dateStr && l.subjectId === def.subjectId && l.lessonNumber === def.lessonNumber
       );
@@ -692,9 +675,7 @@ async function main() {
         dbJson.lessons.push(jsonLesson);
       }
 
-      // Process attendance for each student (1 to 26)
       for (const student of students) {
-        // Inactive students (e.g., student #12 Мураткалиева) skip or unmark
         if (!student.isActive) {
           continue;
         }
@@ -715,7 +696,6 @@ async function main() {
           }
         }
 
-        // Upsert attendance in Prisma
         await prisma.attendance.upsert({
           where: {
             lessonId_studentId: {
@@ -730,9 +710,8 @@ async function main() {
             status,
           },
         });
-        totalAttendancesCreated++;
+        totalAttendancesUpdated++;
 
-        // Update in dbJson
         let jsonAtt = dbJson.attendances.find(
           (a: any) => a.lessonId === jsonLesson.id && a.studentId === student.id
         );
@@ -754,21 +733,16 @@ async function main() {
     }
   }
 
-  // Update serial sequences in PostgreSQL
-  console.log('\nUpdating PostgreSQL sequence counters...');
+  console.log('Updating PostgreSQL sequence counters...');
   await prisma.$executeRawUnsafe(`SELECT setval(pg_get_serial_sequence('"Lesson"', 'id'), coalesce(max(id), 1)) FROM "Lesson";`);
   await prisma.$executeRawUnsafe(`SELECT setval(pg_get_serial_sequence('"Attendance"', 'id'), coalesce(max(id), 1)) FROM "Attendance";`);
 
-  // Write updated dbJson back to disk
   fs.writeFileSync(DB_FILE, JSON.stringify(dbJson, null, 2), 'utf-8');
   console.log('Synchronized local attendance-db.json successfully.');
 
-  const totalLessonsInDb = await prisma.lesson.count();
-  const totalAttendancesInDb = await prisma.attendance.count();
-
-  console.log(`\nImport completed successfully!`);
-  console.log(`Total Lessons in Neon DB: ${totalLessonsInDb}`);
-  console.log(`Total Attendances in Neon DB: ${totalAttendancesInDb}`);
+  console.log(`\nVerification & Update completed!`);
+  console.log(`Total Lessons: ${await prisma.lesson.count()}`);
+  console.log(`Total Attendances: ${await prisma.attendance.count()}`);
 
   await prisma.$disconnect();
 }
