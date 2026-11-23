@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_ABSENT
+  UNMARKED
+}
+
+model Student {
+  id          Int          @id @default(autoincrement())
+  fullName    String
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  attendances Attendance[]
+
+  @@index([isActive])
+  @@index([fullName])
+}
+
+model Subject {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lessons   Lesson[]
+
+  @@index([isActive])
+}
+
+model Lesson {
+  id           Int          @id @default(autoincrement())
+  date         DateTime     @db.Date
+  subjectId    Int
+  lessonNumber Int
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  subject     Subject      @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  attendances Attendance[]
+
+  @@unique([date, subjectId, lessonNumber])
+  @@index([date])
+  @@index([subjectId])
+}
+
+model Attendance {
+  id        Int              @id @default(autoincrement())
+  lessonId  Int
+  studentId Int
+  status    AttendanceStatus @default(UNMARKED)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  lesson  Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, studentId])
+  @@index([lessonId])
+  @@index([studentId])
+  @@index([status])
+}
