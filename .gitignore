@@ -35,4 +35,5 @@ Thumbs.db
 *.sw?
 
 # Temporary files
+*.tsbuildinfo
 testfile

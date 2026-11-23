@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Calendar,
   Check,
   CheckCheck,
   Clock,
@@ -40,7 +39,6 @@ export function AttendancePage() {
   const [date, setDate] = useState(getTodayIso);
   const [subjectId, setSubjectId] = useState<number | ''>('');
   const [lessonNumber, setLessonNumber] = useState<number>(1);
-  const [autoTimeEnabled, setAutoTimeEnabled] = useState(true);
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [students, setStudents] = useState<Student[]>([]);

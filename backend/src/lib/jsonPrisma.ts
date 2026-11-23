@@ -668,7 +668,7 @@ class JsonDatabase {
           });
         }
         if (args.include.attendances.orderBy?.student?.fullName) {
-          atts.sort((a, b) => (a.student?.fullName || '').localeCompare(b.student?.fullName || '', 'ru'));
+          atts.sort((a: any, b: any) => (a.student?.fullName || '').localeCompare(b.student?.fullName || '', 'ru'));
         }
         res.attendances = atts;
       }
@@ -706,7 +706,7 @@ class JsonDatabase {
       const l = this.data.lessons.find((item) => item.id === args.where.id);
       if (!l) throw new Error('Lesson not found');
       if (args.data.date !== undefined) {
-        l.date = args.data.date instanceof Date ? args.data.date.toISOString().slice(0, 10) : args.data.date;
+        l.date = (args.data.date as any) instanceof Date ? (args.data.date as any).toISOString().slice(0, 10) : String(args.data.date);
       }
       if (args.data.subjectId !== undefined) l.subjectId = args.data.subjectId;
       if (args.data.lessonNumber !== undefined) l.lessonNumber = args.data.lessonNumber;

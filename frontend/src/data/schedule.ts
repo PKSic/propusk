@@ -241,7 +241,6 @@ export function getAutoSelectedLesson(dateStr: string, now = new Date()): {
     }
   }
 
-  const slot = LESSON_TIME_SLOTS.find((s) => s.number === best.lessonNumber) || currentSlotInfo.slot;
   return {
     lessonNumber: best.lessonNumber,
     subjectName: best.subjectName,
