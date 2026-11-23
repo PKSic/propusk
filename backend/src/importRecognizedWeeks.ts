@@ -555,7 +555,6 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
   },
   '2026-11-10': {
     2: [AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
-    3: [AttendanceStatus.PRESENT, AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
     4: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
     5: 'ALL_2',
     6: 'ALL_2',
@@ -575,7 +574,7 @@ const DAY_ABSENCES: Record<string, StudentDayMarks> = {
   },
   '2026-11-11': {
     2: 'ALL_2',
-    3: [AttendanceStatus.PRESENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT, AttendanceStatus.ABSENT],
+    3: 'ALL_2',
     4: 'ALL_2',
     5: 'ALL_2',
     6: 'ALL_2',
