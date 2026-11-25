@@ -1,5 +1,38 @@
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'HALF_ABSENT' | 'UNMARKED';
 
+export type CertificateType = 'MEDICAL' | 'EXEMPTION' | 'FAMILY' | 'OTHER';
+
+export interface CertificateRef {
+  id: number;
+  type: CertificateType;
+  reason: string;
+  dateFrom?: string;
+  dateTo?: string;
+  documentNumber: string | null;
+}
+
+export interface Certificate {
+  id: number;
+  studentId: number;
+  dateFrom: string;
+  dateTo: string;
+  reason: string;
+  type: CertificateType;
+  documentNumber: string | null;
+  comment: string | null;
+  hasPhoto: boolean;
+  photoMimeType: string | null;
+  coveredLessonsCount?: number;
+  coveredHours?: number;
+  student?: {
+    id: number;
+    fullName: string;
+    isActive: boolean;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AttendanceStats {
   presentCount: number;
   halfAbsentCount: number;
@@ -7,6 +40,8 @@ export interface AttendanceStats {
   unmarkedCount: number;
   markedLessonsCount: number;
   missedHours: number;
+  excusedMissedHours: number;
+  unexcusedMissedHours: number;
   attendanceRate: number | null;
 }
 
@@ -14,6 +49,7 @@ export interface Student {
   id: number;
   fullName: string;
   isActive: boolean;
+  certificatesCount?: number;
   createdAt: string;
   updatedAt: string;
   stats: AttendanceStats & {
@@ -46,6 +82,8 @@ export interface LessonSummary {
   halfAbsentCount: number;
   unmarkedCount: number;
   missedHours: number;
+  excusedMissedHours: number;
+  unexcusedMissedHours: number;
 }
 
 export interface LessonAttendanceRecord {
@@ -53,6 +91,9 @@ export interface LessonAttendanceRecord {
   lessonId: number;
   studentId: number;
   status: AttendanceStatus;
+  isExcused?: boolean;
+  certificateId?: number | null;
+  certificate?: CertificateRef | null;
   student: {
     id: number;
     fullName: string;
@@ -69,7 +110,11 @@ export interface DashboardData {
     totalStudents: number;
     lessonsThisMonth: number;
     missedHoursThisWeek: number;
+    excusedHoursThisWeek: number;
+    unexcusedHoursThisWeek: number;
     missedHoursThisMonth: number;
+    excusedHoursThisMonth: number;
+    unexcusedHoursThisMonth: number;
     weekRange: { from: string; to: string };
     monthRange: { from: string; to: string };
   };
@@ -78,6 +123,8 @@ export interface DashboardData {
     id: number;
     fullName: string;
     missedHours: number;
+    excusedMissedHours: number;
+    unexcusedMissedHours: number;
     missedHoursThisMonth: number;
     absentCount: number;
     halfAbsentCount: number;
@@ -86,6 +133,8 @@ export interface DashboardData {
   dailyChart: Array<{
     date: string;
     missedHours: number;
+    excusedMissedHours: number;
+    unexcusedMissedHours: number;
     presentCount: number;
     absentCount: number;
     halfAbsentCount: number;
@@ -113,6 +162,9 @@ export interface StudentDetailResponse {
     lessonNumber: number;
     subject: { id: number; name: string };
     status: AttendanceStatus;
+    isExcused: boolean;
+    certificateId: number | null;
+    certificate: CertificateRef | null;
     missedHours: number;
   }>;
   absencesHistory: Array<{
@@ -122,6 +174,10 @@ export interface StudentDetailResponse {
     lessonNumber: number;
     subject: { id: number; name: string };
     status: AttendanceStatus;
+    isExcused: boolean;
+    certificateId: number | null;
+    certificate: CertificateRef | null;
     missedHours: number;
   }>;
+  certificates: Certificate[];
 }

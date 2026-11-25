@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 import { summarizeLessonAttendances, type AttendanceStatusValue } from '../services/attendanceCalculator.js';
+import {
+  findCoveringCertificatesMap,
+  reconcileStudentCertificateAttendance,
+  resolveAttendanceExcusedState,
+} from '../services/certificateSync.js';
 import { formatDateOnly, parseDateOnly } from '../utils/dateRange.js';
 
 export const lessonsRouter = Router();
@@ -18,6 +23,7 @@ const createLessonSchema = z.object({
       z.object({
         studentId: z.number().int().positive(),
         status: attendanceStatusEnum,
+        isExcused: z.boolean().optional(),
       }),
     )
     .optional(),
@@ -70,7 +76,7 @@ lessonsRouter.get(
       include: {
         subject: { select: { id: true, name: true, isActive: true } },
         attendances: {
-          select: { studentId: true, status: true },
+          select: { studentId: true, status: true, isExcused: true },
         },
       },
     });
@@ -78,7 +84,10 @@ lessonsRouter.get(
     res.json({
       lessons: lessons.map((lesson) => {
         const summary = summarizeLessonAttendances(
-          lesson.attendances.map((a) => ({ status: a.status as AttendanceStatusValue })),
+          lesson.attendances.map((a) => ({
+            status: a.status as AttendanceStatusValue,
+            isExcused: a.isExcused,
+          })),
         );
         return {
           id: lesson.id,
@@ -145,12 +154,24 @@ lessonsRouter.post(
       });
 
       if (body.records && body.records.length > 0) {
+        const studentIds = [...new Set(body.records.map((r) => r.studentId))];
+        const coveringMap = await findCoveringCertificatesMap(tx, studentIds, parsedDate);
+
         await tx.attendance.createMany({
-          data: body.records.map((r) => ({
-            lessonId: lesson.id,
-            studentId: r.studentId,
-            status: r.status,
-          })),
+          data: body.records.map((r) => {
+            const resolved = resolveAttendanceExcusedState({
+              status: r.status,
+              explicitIsExcused: r.isExcused,
+              coveringCertificateId: coveringMap.get(r.studentId) ?? null,
+            });
+            return {
+              lessonId: lesson.id,
+              studentId: r.studentId,
+              status: r.status,
+              isExcused: resolved.isExcused,
+              certificateId: resolved.certificateId,
+            };
+          }),
         });
       }
 
@@ -159,7 +180,10 @@ lessonsRouter.post(
         include: {
           subject: { select: { id: true, name: true } },
           attendances: {
-            include: { student: { select: { id: true, fullName: true, isActive: true } } },
+            include: {
+              student: { select: { id: true, fullName: true, isActive: true } },
+              certificate: { select: { id: true, type: true, reason: true, documentNumber: true } },
+            },
           },
         },
       });
@@ -193,6 +217,7 @@ lessonsRouter.get(
         attendances: {
           include: {
             student: { select: { id: true, fullName: true, isActive: true } },
+            certificate: { select: { id: true, type: true, reason: true, documentNumber: true } },
           },
           orderBy: { student: { fullName: 'asc' } },
         },
@@ -204,7 +229,10 @@ lessonsRouter.get(
     }
 
     const summary = summarizeLessonAttendances(
-      lesson.attendances.map((a) => ({ status: a.status as AttendanceStatusValue })),
+      lesson.attendances.map((a) => ({
+        status: a.status as AttendanceStatusValue,
+        isExcused: a.isExcused,
+      })),
     );
 
     res.json({
@@ -266,16 +294,37 @@ lessonsRouter.put(
       );
     }
 
-    const updated = await prisma.lesson.update({
-      where: { id },
-      data: {
-        date: nextDate,
-        subjectId: nextSubjectId,
-        lessonNumber: nextLessonNumber,
-      },
-      include: {
-        subject: { select: { id: true, name: true } },
-      },
+    const dateChanged = nextDate.getTime() !== existing.date.getTime();
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const lesson = await tx.lesson.update({
+        where: { id },
+        data: {
+          date: nextDate,
+          subjectId: nextSubjectId,
+          lessonNumber: nextLessonNumber,
+        },
+        include: {
+          subject: { select: { id: true, name: true } },
+        },
+      });
+
+      if (dateChanged) {
+        const affectedAttendances = await tx.attendance.findMany({
+          where: { lessonId: id },
+          select: { studentId: true },
+        });
+        const fromRange = existing.date.getTime() < nextDate.getTime() ? existing.date : nextDate;
+        const toRange = existing.date.getTime() > nextDate.getTime() ? existing.date : nextDate;
+        for (const att of affectedAttendances) {
+          await reconcileStudentCertificateAttendance(tx, att.studentId, {
+            from: fromRange,
+            to: toRange,
+          });
+        }
+      }
+
+      return lesson;
     });
 
     res.json({

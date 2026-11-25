@@ -11,16 +11,28 @@ function calculateStatsFromRecords(records) {
   let halfAbsentCount = 0;
   let absentCount = 0;
   let unmarkedCount = 0;
+  let excusedMissedHours = 0;
+  let unexcusedMissedHours = 0;
 
   for (const r of records) {
+    let hours = 0;
     if (r.status === 'PRESENT') presentCount += 1;
-    else if (r.status === 'HALF_ABSENT') halfAbsentCount += 1;
-    else if (r.status === 'ABSENT') absentCount += 1;
-    else if (r.status === 'UNMARKED') unmarkedCount += 1;
+    else if (r.status === 'HALF_ABSENT') {
+      halfAbsentCount += 1;
+      hours = 1;
+    } else if (r.status === 'ABSENT') {
+      absentCount += 1;
+      hours = 2;
+    } else if (r.status === 'UNMARKED') unmarkedCount += 1;
+
+    if (hours > 0) {
+      if (r.isExcused) excusedMissedHours += hours;
+      else unexcusedMissedHours += hours;
+    }
   }
 
   const markedLessonsCount = presentCount + halfAbsentCount + absentCount;
-  const missedHours = absentCount * 2 + halfAbsentCount * 1;
+  const missedHours = excusedMissedHours + unexcusedMissedHours;
   const attendanceRate =
     markedLessonsCount > 0
       ? Math.round(((presentCount + halfAbsentCount * 0.5) / markedLessonsCount) * 1000) / 10
@@ -33,6 +45,8 @@ function calculateStatsFromRecords(records) {
     unmarkedCount,
     markedLessonsCount,
     missedHours,
+    excusedMissedHours,
+    unexcusedMissedHours,
     attendanceRate,
   };
 }
@@ -272,4 +286,39 @@ test('12. Неотмеченный студент не учитывается к
   assert.equal(stats.unmarkedCount, 2);
   assert.equal(stats.markedLessonsCount, 1);
   assert.equal(stats.attendanceRate, 100);
+});
+
+test('13. Разделение пропусков на уважительные и неуважительные часы', () => {
+  const stats = calculateStatsFromRecords([
+    { status: 'ABSENT', isExcused: true },
+    { status: 'HALF_ABSENT', isExcused: true },
+    { status: 'ABSENT', isExcused: false },
+    { status: 'HALF_ABSENT' },
+    { status: 'PRESENT', isExcused: true },
+  ]);
+  assert.equal(stats.missedHours, 6);
+  assert.equal(stats.excusedMissedHours, 3);
+  assert.equal(stats.unexcusedMissedHours, 3);
+  assert.equal(stats.excusedMissedHours + stats.unexcusedMissedHours, stats.missedHours);
+});
+
+test('14. Синхронизация справки с диапазоном дат корректно разделяет часы', () => {
+  const certFrom = parseDateOnly('2026-10-12');
+  const certTo = parseDateOnly('2026-10-16');
+  const lessonDates = [
+    { date: '2026-10-12', status: 'ABSENT' },
+    { date: '2026-10-14', status: 'HALF_ABSENT' },
+    { date: '2026-10-19', status: 'ABSENT' },
+  ];
+
+  const records = lessonDates.map((item) => {
+    const d = parseDateOnly(item.date);
+    const covered = d >= certFrom && d <= certTo;
+    return { status: item.status, isExcused: covered };
+  });
+
+  const stats = calculateStatsFromRecords(records);
+  assert.equal(stats.missedHours, 5);
+  assert.equal(stats.excusedMissedHours, 3);
+  assert.equal(stats.unexcusedMissedHours, 2);
 });

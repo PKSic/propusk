@@ -39,28 +39,41 @@ studentsRouter.get(
             lesson: { select: { date: true } },
           },
         },
+        _count: {
+          select: { certificates: true },
+        },
       },
     });
 
     const enriched = students.map((s) => {
       const allStats = calculateStatsFromRecords(
-        s.attendances.map((a) => ({ status: a.status as AttendanceStatusValue })),
+        s.attendances.map((a) => ({
+          status: a.status as AttendanceStatusValue,
+          isExcused: a.isExcused,
+        })),
       );
       const weekStats = calculateStatsFromRecords(
         s.attendances
           .filter((a) => a.lesson.date >= weekRange.from && a.lesson.date <= weekRange.to)
-          .map((a) => ({ status: a.status as AttendanceStatusValue })),
+          .map((a) => ({
+            status: a.status as AttendanceStatusValue,
+            isExcused: a.isExcused,
+          })),
       );
       const monthStats = calculateStatsFromRecords(
         s.attendances
           .filter((a) => a.lesson.date >= monthRange.from && a.lesson.date <= monthRange.to)
-          .map((a) => ({ status: a.status as AttendanceStatusValue })),
+          .map((a) => ({
+            status: a.status as AttendanceStatusValue,
+            isExcused: a.isExcused,
+          })),
       );
 
       return {
         id: s.id,
         fullName: s.fullName,
         isActive: s.isActive,
+        certificatesCount: s._count.certificates,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
         stats: {

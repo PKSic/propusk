@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 import { summarizeLessonAttendances, type AttendanceStatusValue } from '../services/attendanceCalculator.js';
+import {
+  findCoveringCertificatesMap,
+  isMissedStatus,
+  resolveAttendanceExcusedState,
+} from '../services/certificateSync.js';
 import { formatDateOnly, parseDateOnly } from '../utils/dateRange.js';
 
 export const attendanceRouter = Router();
@@ -15,9 +20,14 @@ const upsertLessonAttendanceSchema = z.object({
       z.object({
         studentId: z.number().int().positive(),
         status: attendanceStatusEnum,
+        isExcused: z.boolean().optional(),
       }),
     )
     .min(1, 'Список записей посещаемости не может быть пустым'),
+});
+
+const toggleExcusedSchema = z.object({
+  isExcused: z.boolean(),
 });
 
 attendanceRouter.get(
@@ -47,6 +57,9 @@ attendanceRouter.get(
         lesson: {
           include: { subject: { select: { id: true, name: true } } },
         },
+        certificate: {
+          select: { id: true, type: true, reason: true, documentNumber: true },
+        },
       },
       orderBy: [{ lesson: { date: 'desc' } }, { student: { fullName: 'asc' } }],
     });
@@ -57,6 +70,9 @@ attendanceRouter.get(
         lessonId: r.lessonId,
         studentId: r.studentId,
         status: r.status,
+        isExcused: r.isExcused,
+        certificateId: r.certificateId,
+        certificate: r.certificate,
         student: r.student,
         lesson: {
           id: r.lesson.id,
@@ -98,19 +114,48 @@ attendanceRouter.put(
     }
 
     // Дедуплицируем входные записи по studentId (берём последнее значение)
-    const dedupedMap = new Map<number, AttendanceStatusValue>();
+    const dedupedMap = new Map<number, { status: AttendanceStatusValue; isExcused?: boolean }>();
     for (const r of body.records) {
-      dedupedMap.set(r.studentId, r.status);
+      dedupedMap.set(r.studentId, { status: r.status, isExcused: r.isExcused });
     }
 
     const updatedRecords = await prisma.$transaction(async (tx) => {
-      for (const [studentId, status] of dedupedMap.entries()) {
+      const [coveringMap, existingAttendances] = await Promise.all([
+        findCoveringCertificatesMap(tx, studentIds, lesson.date),
+        tx.attendance.findMany({
+          where: { lessonId, studentId: { in: studentIds } },
+          select: { studentId: true, isExcused: true, certificateId: true },
+        }),
+      ]);
+
+      const previousMap = new Map(existingAttendances.map((a) => [a.studentId, a]));
+
+      for (const [studentId, entry] of dedupedMap.entries()) {
+        const prev = previousMap.get(studentId);
+        const resolved = resolveAttendanceExcusedState({
+          status: entry.status,
+          explicitIsExcused: entry.isExcused,
+          coveringCertificateId: coveringMap.get(studentId) ?? null,
+          previousIsExcused: prev?.isExcused,
+          previousCertificateId: prev?.certificateId,
+        });
+
         await tx.attendance.upsert({
           where: {
             lessonId_studentId: { lessonId, studentId },
           },
-          update: { status },
-          create: { lessonId, studentId, status },
+          update: {
+            status: entry.status,
+            isExcused: resolved.isExcused,
+            certificateId: resolved.certificateId,
+          },
+          create: {
+            lessonId,
+            studentId,
+            status: entry.status,
+            isExcused: resolved.isExcused,
+            certificateId: resolved.certificateId,
+          },
         });
       }
 
@@ -118,13 +163,17 @@ attendanceRouter.put(
         where: { lessonId },
         include: {
           student: { select: { id: true, fullName: true, isActive: true } },
+          certificate: { select: { id: true, type: true, reason: true, documentNumber: true } },
         },
         orderBy: { student: { fullName: 'asc' } },
       });
     });
 
     const summary = summarizeLessonAttendances(
-      updatedRecords.map((r) => ({ status: r.status as AttendanceStatusValue })),
+      updatedRecords.map((r) => ({
+        status: r.status as AttendanceStatusValue,
+        isExcused: r.isExcused,
+      })),
     );
 
     res.json({
@@ -132,5 +181,57 @@ attendanceRouter.put(
       ...summary,
       attendances: updatedRecords,
     });
+  }),
+);
+
+/**
+ * Переключение признака уважительного пропуска (уваж./неуваж.) для конкретной отметки.
+ */
+attendanceRouter.patch(
+  '/:id/excused',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new AppError(400, 'Некорректный ID записи посещаемости');
+    }
+
+    const body = toggleExcusedSchema.parse(req.body);
+
+    const existing = await prisma.attendance.findUnique({
+      where: { id },
+      include: { lesson: { select: { date: true } } },
+    });
+    if (!existing) {
+      throw new AppError(404, 'Запись посещаемости не найдена');
+    }
+    if (!isMissedStatus(existing.status as AttendanceStatusValue)) {
+      throw new AppError(400, 'Отметку уважительной причины можно ставить только на пропуск');
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      let certificateId: number | null = null;
+      if (body.isExcused) {
+        const covering = await findCoveringCertificatesMap(
+          tx,
+          [existing.studentId],
+          existing.lesson.date,
+        );
+        certificateId = covering.get(existing.studentId) ?? null;
+      }
+
+      return tx.attendance.update({
+        where: { id },
+        data: {
+          isExcused: body.isExcused,
+          certificateId,
+        },
+        include: {
+          student: { select: { id: true, fullName: true, isActive: true } },
+          certificate: { select: { id: true, type: true, reason: true, documentNumber: true } },
+        },
+      });
+    });
+
+    res.json({ attendance: updated });
   }),
 );

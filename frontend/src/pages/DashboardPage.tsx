@@ -89,14 +89,14 @@ export function DashboardPage() {
     {
       label: 'Пропущено за неделю',
       value: `${data.kpi.missedHoursThisWeek} ч`,
-      sub: `${formatRuDate(data.kpi.weekRange.from)} — ${formatRuDate(data.kpi.weekRange.to)}`,
+      sub: `Уваж: ${data.kpi.excusedHoursThisWeek} ч • Неуваж: ${data.kpi.unexcusedHoursThisWeek} ч`,
       icon: Clock,
       accent: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
     },
     {
       label: 'Пропущено за месяц',
       value: `${data.kpi.missedHoursThisMonth} ч`,
-      sub: 'Суммарно по группе',
+      sub: `Уваж: ${data.kpi.excusedHoursThisMonth} ч • Неуваж: ${data.kpi.unexcusedHoursThisMonth} ч`,
       icon: CalendarClock,
       accent: 'text-red-400 bg-red-500/10 border-red-500/20',
     },
@@ -254,7 +254,9 @@ export function DashboardPage() {
                       {student.missedHours} ч
                     </span>
                     <div className="text-[11px] text-slate-500">
-                      {student.missedHoursThisMonth} ч / мес
+                      <span className="text-sky-400">{student.excusedMissedHours} ув.</span>
+                      {' / '}
+                      <span>{student.unexcusedMissedHours} неув.</span>
                     </div>
                   </div>
                 </Link>

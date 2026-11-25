@@ -2,6 +2,7 @@ export type AttendanceStatusValue = 'PRESENT' | 'ABSENT' | 'HALF_ABSENT' | 'UNMA
 
 export interface AttendanceRecordLike {
   status: AttendanceStatusValue;
+  isExcused?: boolean;
 }
 
 export interface StudentAttendanceStats {
@@ -11,6 +12,8 @@ export interface StudentAttendanceStats {
   unmarkedCount: number;
   markedLessonsCount: number;
   missedHours: number;
+  excusedMissedHours: number;
+  unexcusedMissedHours: number;
   attendanceRate: number | null;
 }
 
@@ -20,6 +23,8 @@ export interface LessonAttendanceSummary {
   halfAbsentCount: number;
   unmarkedCount: number;
   missedHours: number;
+  excusedMissedHours: number;
+  unexcusedMissedHours: number;
 }
 
 /**
@@ -44,9 +49,10 @@ export function getMissedHoursForStatus(status: AttendanceStatusValue): number {
 
 /**
  * Централизованный расчёт статистики студента по массиву записей посещаемости.
- * Формула: Пропущенные часы = (Полные пропуски × 2) + (Половины пар × 1).
- * Процент посещаемости рассчитывается по фактически отмеченным занятиям
- * с учётом пропущенной доли пары: ((Присутствия + 0.5 × Половины пар) / Отмеченные пары) × 100.
+ * Формула: Пропущенные часы = (Полные пропуски × 2) + (Половины пар × 1),
+ * с разбивкой на уважительные (isExcused = true) и неуважительные (isExcused = false).
+ * Процент посещаемости рассчитывается по фактически отмеченным занятиям:
+ * ((Присутствия + 0.5 × Половины пар) / Отмеченные пары) × 100.
  */
 export function calculateStatsFromRecords(
   records: readonly AttendanceRecordLike[],
@@ -55,26 +61,39 @@ export function calculateStatsFromRecords(
   let halfAbsentCount = 0;
   let absentCount = 0;
   let unmarkedCount = 0;
+  let excusedMissedHours = 0;
+  let unexcusedMissedHours = 0;
 
   for (const record of records) {
+    let recordHours = 0;
     switch (record.status) {
       case 'PRESENT':
         presentCount += 1;
         break;
       case 'HALF_ABSENT':
         halfAbsentCount += 1;
+        recordHours = 1;
         break;
       case 'ABSENT':
         absentCount += 1;
+        recordHours = 2;
         break;
       case 'UNMARKED':
         unmarkedCount += 1;
         break;
     }
+
+    if (recordHours > 0) {
+      if (record.isExcused) {
+        excusedMissedHours += recordHours;
+      } else {
+        unexcusedMissedHours += recordHours;
+      }
+    }
   }
 
   const markedLessonsCount = presentCount + halfAbsentCount + absentCount;
-  const missedHours = absentCount * 2 + halfAbsentCount * 1;
+  const missedHours = excusedMissedHours + unexcusedMissedHours;
 
   let attendanceRate: number | null = null;
   if (markedLessonsCount > 0) {
@@ -89,6 +108,8 @@ export function calculateStatsFromRecords(
     unmarkedCount,
     markedLessonsCount,
     missedHours,
+    excusedMissedHours,
+    unexcusedMissedHours,
     attendanceRate,
   };
 }
@@ -103,5 +124,7 @@ export function summarizeLessonAttendances(
     halfAbsentCount: stats.halfAbsentCount,
     unmarkedCount: stats.unmarkedCount,
     missedHours: stats.missedHours,
+    excusedMissedHours: stats.excusedMissedHours,
+    unexcusedMissedHours: stats.unexcusedMissedHours,
   };
 }

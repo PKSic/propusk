@@ -1,6 +1,9 @@
 import type {
   AttendanceStatus,
+  Certificate,
+  CertificateType,
   DashboardData,
+  LessonAttendanceRecord,
   LessonDetail,
   LessonSummary,
   Student,
@@ -118,7 +121,7 @@ export const api = {
     date: string;
     subjectId: number;
     lessonNumber: number;
-    records?: Array<{ studentId: number; status: AttendanceStatus }>;
+    records?: Array<{ studentId: number; status: AttendanceStatus; isExcused?: boolean }>;
   }) =>
     request<{ lesson: LessonDetail }>('/lessons', {
       method: 'POST',
@@ -137,7 +140,7 @@ export const api = {
   // Attendance
   saveLessonAttendance: (
     lessonId: number,
-    records: Array<{ studentId: number; status: AttendanceStatus }>,
+    records: Array<{ studentId: number; status: AttendanceStatus; isExcused?: boolean }>,
   ) =>
     request<{
       lessonId: number;
@@ -146,8 +149,81 @@ export const api = {
       halfAbsentCount: number;
       unmarkedCount: number;
       missedHours: number;
+      excusedMissedHours: number;
+      unexcusedMissedHours: number;
+      attendances: LessonAttendanceRecord[];
     }>(`/attendance/lesson/${lessonId}`, {
       method: 'PUT',
       body: JSON.stringify({ records }),
     }),
+  toggleAttendanceExcused: (attendanceId: number, isExcused: boolean) =>
+    request<{ attendance: LessonAttendanceRecord }>(`/attendance/${attendanceId}/excused`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isExcused }),
+    }),
+
+  // Certificates
+  getCertificates: (params?: {
+    studentId?: number;
+    type?: CertificateType | '';
+    search?: string;
+    from?: string;
+    to?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.studentId) sp.set('studentId', String(params.studentId));
+    if (params?.type) sp.set('type', params.type);
+    if (params?.search) sp.set('search', params.search);
+    if (params?.from) sp.set('from', params.from);
+    if (params?.to) sp.set('to', params.to);
+    const qs = sp.toString();
+    return request<{ certificates: Certificate[] }>(`/certificates${qs ? `?${qs}` : ''}`);
+  },
+  previewCertificateImpact: (studentId: number, dateFrom: string, dateTo: string) => {
+    const sp = new URLSearchParams({
+      studentId: String(studentId),
+      dateFrom,
+      dateTo,
+    });
+    return request<{ lessonsCount: number; missedHours: number }>(
+      `/certificates/preview-impact?${sp.toString()}`,
+    );
+  },
+  createCertificate: (payload: {
+    studentId: number;
+    dateFrom: string;
+    dateTo: string;
+    reason: string;
+    type: CertificateType;
+    documentNumber?: string | null;
+    comment?: string | null;
+    photoData?: string | null;
+  }) =>
+    request<{ certificate: Certificate; linkedUpdatedCount: number }>('/certificates', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateCertificate: (
+    id: number,
+    payload: {
+      studentId?: number;
+      dateFrom?: string;
+      dateTo?: string;
+      reason?: string;
+      type?: CertificateType;
+      documentNumber?: string | null;
+      comment?: string | null;
+      photoData?: string | null;
+    },
+  ) =>
+    request<{ certificate: Certificate; linkedUpdatedCount: number }>(`/certificates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  deleteCertificate: (id: number) =>
+    request<{ deleted: boolean; id: number }>(`/certificates/${id}`, {
+      method: 'DELETE',
+    }),
+  getCertificatePhotoUrl: (id: number, cacheKey?: string) =>
+    `${API_BASE}/certificates/${id}/photo${cacheKey ? `?v=${encodeURIComponent(cacheKey)}` : ''}`,
 };

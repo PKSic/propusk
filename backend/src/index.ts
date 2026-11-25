@@ -9,6 +9,7 @@ import { subjectsRouter } from './routes/subjects.js';
 import { lessonsRouter } from './routes/lessons.js';
 import { attendanceRouter } from './routes/attendance.js';
 import { statisticsRouter } from './routes/statistics.js';
+import { certificatesRouter } from './routes/certificates.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,7 +30,7 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '4mb' }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', group: 'ВЕБ-32К', service: 'Attendance Manager API' });
@@ -40,6 +41,7 @@ app.use('/api/subjects', subjectsRouter);
 app.use('/api/lessons', lessonsRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/statistics', statisticsRouter);
+app.use('/api/certificates', certificatesRouter);
 
 // Serve frontend static files if built
 if (fs.existsSync(FRONTEND_DIST)) {

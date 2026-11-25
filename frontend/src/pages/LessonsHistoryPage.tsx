@@ -226,7 +226,12 @@ export function LessonsHistoryPage() {
                       {lesson.halfAbsentCount}
                     </td>
                     <td className="px-5 py-3.5 text-slate-200 font-semibold">
-                      {lesson.missedHours} ч
+                      <span>{lesson.missedHours} ч</span>
+                      {lesson.excusedMissedHours > 0 && (
+                        <span className="ml-1.5 text-[11px] font-normal text-sky-400">
+                          ({lesson.excusedMissedHours} ч ув.)
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="inline-flex items-center gap-1">
@@ -309,25 +314,35 @@ export function LessonsHistoryPage() {
                           >
                             {rec.student.fullName}
                           </Link>
-                          <span
-                            className={`rounded-md px-2 py-0.5 text-xs font-medium border ${
-                              rec.status === 'PRESENT'
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          <div className="flex items-center gap-2">
+                            {rec.isExcused && (
+                              <span
+                                className="rounded-md bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-300 border border-sky-500/25"
+                                title={rec.certificate?.reason || 'Уважительная причина'}
+                              >
+                                {rec.certificate ? 'По справке' : 'Уваж.'}
+                              </span>
+                            )}
+                            <span
+                              className={`rounded-md px-2 py-0.5 text-xs font-medium border ${
+                                rec.status === 'PRESENT'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  : rec.status === 'HALF_ABSENT'
+                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                    : rec.status === 'ABSENT'
+                                      ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                      : 'bg-slate-800 text-slate-400 border-borderSubtle'
+                              }`}
+                            >
+                              {rec.status === 'PRESENT'
+                                ? 'Присутствовал'
                                 : rec.status === 'HALF_ABSENT'
-                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                  ? 'Половина пары (1 ч)'
                                   : rec.status === 'ABSENT'
-                                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                                    : 'bg-slate-800 text-slate-400 border-borderSubtle'
-                            }`}
-                          >
-                            {rec.status === 'PRESENT'
-                              ? 'Присутствовал'
-                              : rec.status === 'HALF_ABSENT'
-                                ? 'Половина пары (1 ч)'
-                                : rec.status === 'ABSENT'
-                                  ? 'Отсутствовал (2 ч)'
-                                  : 'Не отмечен'}
-                          </span>
+                                    ? 'Отсутствовал (2 ч)'
+                                    : 'Не отмечен'}
+                            </span>
+                          </div>
                         </div>
                       ))
                     )}

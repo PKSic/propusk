@@ -210,7 +210,7 @@ export function StudentsPage() {
                   <th className="px-5 py-3 font-medium">ФИО</th>
                   <th className="px-5 py-3 font-medium">За неделю</th>
                   <th className="px-5 py-3 font-medium">За месяц</th>
-                  <th className="px-5 py-3 font-medium">Всего пропущено</th>
+                  <th className="px-5 py-3 font-medium">Всего (уваж. / неуваж.)</th>
                   <th className="px-5 py-3 font-medium">Посещаемость</th>
                   <th className="px-5 py-3 font-medium text-right">Действия</th>
                 </tr>
@@ -235,13 +235,27 @@ export function StudentsPage() {
                     <td className="px-5 py-3.5 text-slate-300">{student.stats.weekMissedHours} ч</td>
                     <td className="px-5 py-3.5 text-slate-300">{student.stats.monthMissedHours} ч</td>
                     <td className="px-5 py-3.5">
-                      <span
-                        className={`font-semibold ${
-                          student.stats.missedHours > 0 ? 'text-red-400' : 'text-slate-300'
-                        }`}
-                      >
-                        {student.stats.missedHours} ч
-                      </span>
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span
+                          className={`font-semibold ${
+                            student.stats.missedHours > 0 ? 'text-red-400' : 'text-slate-300'
+                          }`}
+                        >
+                          {student.stats.missedHours} ч
+                        </span>
+                        {student.stats.missedHours > 0 && (
+                          <span className="text-[11px] text-slate-400">
+                            (<span className="text-sky-400">{student.stats.excusedMissedHours} ув.</span>
+                            {' / '}
+                            <span className="text-red-300">{student.stats.unexcusedMissedHours} неув.</span>)
+                          </span>
+                        )}
+                        {(student.certificatesCount ?? 0) > 0 && (
+                          <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-300 border border-sky-500/20">
+                            справок: {student.certificatesCount}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 text-slate-300">
                       {student.stats.attendanceRate !== null

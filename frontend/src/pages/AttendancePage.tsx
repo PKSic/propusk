@@ -8,12 +8,13 @@ import {
   RotateCcw,
   Save,
   Search,
+  ShieldCheck,
   Sparkles,
   UserCheck,
   X,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import type { AttendanceStatus, Student, Subject } from '../types';
+import type { AttendanceStatus, CertificateRef, Student, Subject } from '../types';
 import { useToast } from '../components/ToastContext';
 import { ConfirmModal } from '../components/ConfirmModal';
 import {
@@ -43,6 +44,8 @@ export function AttendancePage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [statuses, setStatuses] = useState<Record<number, AttendanceStatus>>({});
+  const [excusedMap, setExcusedMap] = useState<Record<number, boolean | undefined>>({});
+  const [certMap, setCertMap] = useState<Record<number, CertificateRef | null>>({});
   const [editingLessonId, setEditingLessonId] = useState<number | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,16 +87,24 @@ export function AttendancePage() {
           const detail = await api.getLesson(found.id);
           setEditingLessonId(found.id);
           const map: Record<number, AttendanceStatus> = {};
+          const exMap: Record<number, boolean | undefined> = {};
+          const cMap: Record<number, CertificateRef | null> = {};
           for (const s of currentStudents) map[s.id] = 'UNMARKED';
           for (const rec of detail.lesson.attendances) {
             map[rec.studentId] = rec.status;
+            exMap[rec.studentId] = rec.isExcused;
+            cMap[rec.studentId] = rec.certificate ?? null;
           }
           setStatuses(map);
+          setExcusedMap(exMap);
+          setCertMap(cMap);
         } else {
           setEditingLessonId(null);
           const resetMap: Record<number, AttendanceStatus> = {};
           for (const s of currentStudents) resetMap[s.id] = 'UNMARKED';
           setStatuses(resetMap);
+          setExcusedMap({});
+          setCertMap({});
         }
       } catch (err) {
         showToast('error', err instanceof Error ? err.message : 'Ошибка проверки занятия');
@@ -130,11 +141,17 @@ export function AttendancePage() {
             setLessonNumber(lesson.lessonNumber);
 
             const map: Record<number, AttendanceStatus> = {};
+            const exMap: Record<number, boolean | undefined> = {};
+            const cMap: Record<number, CertificateRef | null> = {};
             for (const s of studRes.students) map[s.id] = 'UNMARKED';
             for (const rec of lesson.attendances) {
               map[rec.studentId] = rec.status;
+              exMap[rec.studentId] = rec.isExcused;
+              cMap[rec.studentId] = rec.certificate ?? null;
             }
             setStatuses(map);
+            setExcusedMap(exMap);
+            setCertMap(cMap);
           }
         } else {
           // Auto-select based on time & schedule for today
@@ -211,9 +228,23 @@ export function AttendancePage() {
   };
 
   const setStudentStatus = (studentId: number, nextStatus: AttendanceStatus) => {
-    setStatuses((prev) => ({
+    setStatuses((prev) => {
+      const resolved = prev[studentId] === nextStatus ? 'UNMARKED' : nextStatus;
+      if (resolved === 'PRESENT' || resolved === 'UNMARKED') {
+        setExcusedMap((ex) => ({ ...ex, [studentId]: undefined }));
+        setCertMap((c) => ({ ...c, [studentId]: null }));
+      }
+      return {
+        ...prev,
+        [studentId]: resolved,
+      };
+    });
+  };
+
+  const toggleStudentExcused = (studentId: number) => {
+    setExcusedMap((prev) => ({
       ...prev,
-      [studentId]: prev[studentId] === nextStatus ? 'UNMARKED' : nextStatus,
+      [studentId]: !prev[studentId],
     }));
   };
 
@@ -223,6 +254,8 @@ export function AttendancePage() {
       next[s.id] = 'PRESENT';
     }
     setStatuses(next);
+    setExcusedMap({});
+    setCertMap({});
     showToast('success', 'Все студенты отмечены как «Присутствовал»');
   };
 
@@ -245,6 +278,8 @@ export function AttendancePage() {
       next[s.id] = 'UNMARKED';
     }
     setStatuses(next);
+    setExcusedMap({});
+    setCertMap({});
     showToast('info', 'Все отметки сброшены');
   };
 
@@ -321,10 +356,28 @@ export function AttendancePage() {
 
     setSaving(true);
     try {
-      const records = students.map((s) => ({
-        studentId: s.id,
-        status: statuses[s.id] ?? 'UNMARKED',
-      }));
+      const records = students.map((s) => {
+        const status = statuses[s.id] ?? 'UNMARKED';
+        const isMissed = status === 'ABSENT' || status === 'HALF_ABSENT';
+        const isExcusedVal = isMissed ? excusedMap[s.id] : false;
+        return {
+          studentId: s.id,
+          status,
+          ...(isExcusedVal !== undefined ? { isExcused: isExcusedVal } : {}),
+        };
+      });
+
+      const applyResponseCertificates = (attendancesList?: Array<{ studentId: number; isExcused?: boolean; certificate?: CertificateRef | null }>) => {
+        if (!attendancesList) return;
+        const nextEx: Record<number, boolean | undefined> = {};
+        const nextCert: Record<number, CertificateRef | null> = {};
+        for (const rec of attendancesList) {
+          nextEx[rec.studentId] = rec.isExcused;
+          nextCert[rec.studentId] = rec.certificate ?? null;
+        }
+        setExcusedMap(nextEx);
+        setCertMap(nextCert);
+      };
 
       if (editingLessonId) {
         await api.updateLesson(editingLessonId, {
@@ -332,7 +385,8 @@ export function AttendancePage() {
           subjectId,
           lessonNumber,
         });
-        await api.saveLessonAttendance(editingLessonId, records);
+        const saved = await api.saveLessonAttendance(editingLessonId, records);
+        applyResponseCertificates(saved.attendances);
         showToast('success', 'Посещаемость занятия обновлена');
       } else {
         try {
@@ -343,13 +397,15 @@ export function AttendancePage() {
             records,
           });
           setEditingLessonId(created.lesson.id);
+          applyResponseCertificates(created.lesson.attendances);
           showToast('success', 'Занятие и посещаемость сохранены');
         } catch (err) {
           if (err instanceof ApiError && err.status === 409) {
             const existingId = (err.details as { existingLessonId?: number })?.existingLessonId;
             if (existingId) {
-              await api.saveLessonAttendance(existingId, records);
+              const saved = await api.saveLessonAttendance(existingId, records);
               setEditingLessonId(existingId);
+              applyResponseCertificates(saved.attendances);
               showToast('success', 'Существующее занятие обновлено без дубликатов');
             } else {
               throw err;
@@ -724,6 +780,9 @@ export function AttendancePage() {
           <div className="divide-y divide-borderSubtle/60">
             {filteredStudents.map((student, idx) => {
               const current = statuses[student.id] ?? 'UNMARKED';
+              const isMissed = current === 'ABSENT' || current === 'HALF_ABSENT';
+              const isExcused = Boolean(excusedMap[student.id]);
+              const certInfo = certMap[student.id];
               const isFocused = focusedIndex === idx;
 
               return (
@@ -760,48 +819,74 @@ export function AttendancePage() {
                         2 часа
                       </span>
                     )}
+                    {isMissed && isExcused && (
+                      <span
+                        className="rounded-md bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-300 border border-sky-500/25 truncate max-w-[160px]"
+                        title={certInfo?.reason || 'Уважительная причина'}
+                      >
+                        {certInfo ? 'По справке' : 'Уваж.'}
+                      </span>
+                    )}
                   </div>
 
-                  {/* 3 Large Touch-Friendly Status Buttons */}
-                  <div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center">
-                    <button
-                      type="button"
-                      onClick={() => setStudentStatus(student.id, 'PRESENT')}
-                      className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold border transition-all ${
-                        current === 'PRESENT'
-                          ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20'
-                          : 'bg-elevated border-borderSubtle text-slate-400 hover:text-emerald-300 hover:border-emerald-500/40'
-                      }`}
-                    >
-                      <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                      <span>Был</span>
-                    </button>
+                  {/* 3 Large Touch-Friendly Status Buttons + optional Excused toggle */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {isMissed && (
+                      <button
+                        type="button"
+                        onClick={() => toggleStudentExcused(student.id)}
+                        className={`inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-medium border transition-all ${
+                          isExcused
+                            ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                            : 'bg-elevated border-borderSubtle text-slate-400 hover:text-sky-300 hover:border-sky-500/30'
+                        }`}
+                        title="Отметить как уважительную причину"
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        <span>Уваж.</span>
+                      </button>
+                    )}
 
-                    <button
-                      type="button"
-                      onClick={() => setStudentStatus(student.id, 'HALF_ABSENT')}
-                      className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold border transition-all ${
-                        current === 'HALF_ABSENT'
-                          ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md shadow-amber-500/20'
-                          : 'bg-elevated border-borderSubtle text-slate-400 hover:text-amber-300 hover:border-amber-500/40'
-                      }`}
-                    >
-                      <Clock className="h-3.5 w-3.5 stroke-[2.5]" />
-                      <span>0.5 пары</span>
-                    </button>
+                    <div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center">
+                      <button
+                        type="button"
+                        onClick={() => setStudentStatus(student.id, 'PRESENT')}
+                        className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold border transition-all ${
+                          current === 'PRESENT'
+                            ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20'
+                            : 'bg-elevated border-borderSubtle text-slate-400 hover:text-emerald-300 hover:border-emerald-500/40'
+                        }`}
+                      >
+                        <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                        <span>Был</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setStudentStatus(student.id, 'ABSENT')}
-                      className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold border transition-all ${
-                        current === 'ABSENT'
-                          ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-500/20'
-                          : 'bg-elevated border-borderSubtle text-slate-400 hover:text-red-300 hover:border-red-500/40'
-                      }`}
-                    >
-                      <X className="h-3.5 w-3.5 stroke-[2.5]" />
-                      <span>Не был</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setStudentStatus(student.id, 'HALF_ABSENT')}
+                        className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold border transition-all ${
+                          current === 'HALF_ABSENT'
+                            ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md shadow-amber-500/20'
+                            : 'bg-elevated border-borderSubtle text-slate-400 hover:text-amber-300 hover:border-amber-500/40'
+                        }`}
+                      >
+                        <Clock className="h-3.5 w-3.5 stroke-[2.5]" />
+                        <span>0.5 пары</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setStudentStatus(student.id, 'ABSENT')}
+                        className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold border transition-all ${
+                          current === 'ABSENT'
+                            ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-500/20'
+                            : 'bg-elevated border-borderSubtle text-slate-400 hover:text-red-300 hover:border-red-500/40'
+                        }`}
+                      >
+                        <X className="h-3.5 w-3.5 stroke-[2.5]" />
+                        <span>Не был</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

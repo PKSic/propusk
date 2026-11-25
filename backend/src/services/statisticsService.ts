@@ -38,20 +38,20 @@ export async function getDashboardStatistics(referenceDate: Date = new Date()) {
       where: {
         lesson: { date: { gte: weekRange.from, lte: weekRange.to } },
       },
-      select: { status: true },
+      select: { status: true, isExcused: true },
     }),
     prisma.attendance.findMany({
       where: {
         lesson: { date: { gte: monthRange.from, lte: monthRange.to } },
       },
-      select: { status: true },
+      select: { status: true, isExcused: true },
     }),
     prisma.lesson.findMany({
       take: 5,
       orderBy: [{ date: 'desc' }, { lessonNumber: 'desc' }, { id: 'desc' }],
       include: {
         subject: { select: { id: true, name: true } },
-        attendances: { select: { status: true } },
+        attendances: { select: { status: true, isExcused: true } },
       },
     }),
     prisma.student.findMany({
@@ -79,22 +79,34 @@ export async function getDashboardStatistics(referenceDate: Date = new Date()) {
       },
       orderBy: [{ date: 'asc' }, { lessonNumber: 'asc' }],
       include: {
-        attendances: { select: { status: true } },
+        attendances: { select: { status: true, isExcused: true } },
       },
     }),
   ]);
 
-  const missedHoursThisWeek = calculateStatsFromRecords(
-    weekAttendances.map((a) => ({ status: a.status as AttendanceStatusValue })),
-  ).missedHours;
+  const weekSummary = calculateStatsFromRecords(
+    weekAttendances.map((a) => ({
+      status: a.status as AttendanceStatusValue,
+      isExcused: a.isExcused,
+    })),
+  );
 
-  const missedHoursThisMonth = calculateStatsFromRecords(
-    monthAttendances.map((a) => ({ status: a.status as AttendanceStatusValue })),
-  ).missedHours;
+  const monthSummary = calculateStatsFromRecords(
+    monthAttendances.map((a) => ({
+      status: a.status as AttendanceStatusValue,
+      isExcused: a.isExcused,
+    })),
+  );
+
+  const missedHoursThisWeek = weekSummary.missedHours;
+  const missedHoursThisMonth = monthSummary.missedHours;
 
   const recentLessons = recentLessonsRaw.map((lesson) => {
     const summary = summarizeLessonAttendances(
-      lesson.attendances.map((a) => ({ status: a.status as AttendanceStatusValue })),
+      lesson.attendances.map((a) => ({
+        status: a.status as AttendanceStatusValue,
+        isExcused: a.isExcused,
+      })),
     );
     return {
       id: lesson.id,
@@ -108,7 +120,10 @@ export async function getDashboardStatistics(referenceDate: Date = new Date()) {
   const topAbsentees = activeStudents
     .map((student) => {
       const allStats = calculateStatsFromRecords(
-        student.attendances.map((a) => ({ status: a.status as AttendanceStatusValue })),
+        student.attendances.map((a) => ({
+          status: a.status as AttendanceStatusValue,
+          isExcused: a.isExcused,
+        })),
       );
       const monthStats = calculateStatsFromRecords(
         student.attendances
@@ -116,12 +131,17 @@ export async function getDashboardStatistics(referenceDate: Date = new Date()) {
             (a) =>
               a.lesson.date >= monthRange.from && a.lesson.date <= monthRange.to,
           )
-          .map((a) => ({ status: a.status as AttendanceStatusValue })),
+          .map((a) => ({
+            status: a.status as AttendanceStatusValue,
+            isExcused: a.isExcused,
+          })),
       );
       return {
         id: student.id,
         fullName: student.fullName,
         missedHours: allStats.missedHours,
+        excusedMissedHours: allStats.excusedMissedHours,
+        unexcusedMissedHours: allStats.unexcusedMissedHours,
         missedHoursThisMonth: monthStats.missedHours,
         absentCount: allStats.absentCount,
         halfAbsentCount: allStats.halfAbsentCount,
@@ -133,7 +153,15 @@ export async function getDashboardStatistics(referenceDate: Date = new Date()) {
 
   const dailyMap = new Map<
     string,
-    { date: string; missedHours: number; presentCount: number; absentCount: number; halfAbsentCount: number }
+    {
+      date: string;
+      missedHours: number;
+      excusedMissedHours: number;
+      unexcusedMissedHours: number;
+      presentCount: number;
+      absentCount: number;
+      halfAbsentCount: number;
+    }
   >();
 
   for (const lesson of chartLessonsRaw) {
@@ -141,14 +169,21 @@ export async function getDashboardStatistics(referenceDate: Date = new Date()) {
     const existing = dailyMap.get(dateKey) ?? {
       date: dateKey,
       missedHours: 0,
+      excusedMissedHours: 0,
+      unexcusedMissedHours: 0,
       presentCount: 0,
       absentCount: 0,
       halfAbsentCount: 0,
     };
     const summary = summarizeLessonAttendances(
-      lesson.attendances.map((a) => ({ status: a.status as AttendanceStatusValue })),
+      lesson.attendances.map((a) => ({
+        status: a.status as AttendanceStatusValue,
+        isExcused: a.isExcused,
+      })),
     );
     existing.missedHours += summary.missedHours;
+    existing.excusedMissedHours += summary.excusedMissedHours;
+    existing.unexcusedMissedHours += summary.unexcusedMissedHours;
     existing.presentCount += summary.presentCount;
     existing.absentCount += summary.absentCount;
     existing.halfAbsentCount += summary.halfAbsentCount;
@@ -164,7 +199,11 @@ export async function getDashboardStatistics(referenceDate: Date = new Date()) {
       totalStudents,
       lessonsThisMonth,
       missedHoursThisWeek,
+      excusedHoursThisWeek: weekSummary.excusedMissedHours,
+      unexcusedHoursThisWeek: weekSummary.unexcusedMissedHours,
       missedHoursThisMonth,
+      excusedHoursThisMonth: monthSummary.excusedMissedHours,
+      unexcusedHoursThisMonth: monthSummary.unexcusedMissedHours,
       weekRange: { from: weekRange.fromStr, to: weekRange.toStr },
       monthRange: { from: monthRange.fromStr, to: monthRange.toStr },
     },
@@ -180,24 +219,53 @@ export async function getStudentStatistics(
   customTo?: string,
   referenceDate: Date = new Date(),
 ) {
-  const student = await prisma.student.findUnique({
-    where: { id: studentId },
-    include: {
-      attendances: {
-        include: {
-          lesson: {
-            include: {
-              subject: { select: { id: true, name: true } },
+  const [student, certificates] = await Promise.all([
+    prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        attendances: {
+          include: {
+            lesson: {
+              include: {
+                subject: { select: { id: true, name: true } },
+              },
+            },
+            certificate: {
+              select: {
+                id: true,
+                type: true,
+                reason: true,
+                dateFrom: true,
+                dateTo: true,
+                documentNumber: true,
+              },
             },
           },
+          orderBy: [
+            { lesson: { date: 'desc' } },
+            { lesson: { lessonNumber: 'desc' } },
+          ],
         },
-        orderBy: [
-          { lesson: { date: 'desc' } },
-          { lesson: { lessonNumber: 'desc' } },
-        ],
       },
-    },
-  });
+    }),
+    prisma.certificate.findMany({
+      where: { studentId },
+      orderBy: [{ dateFrom: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        studentId: true,
+        dateFrom: true,
+        dateTo: true,
+        reason: true,
+        type: true,
+        documentNumber: true,
+        comment: true,
+        photoMimeType: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+  ]);
 
   if (!student) {
     throw new AppError(404, 'Студент не найден');
@@ -214,13 +282,19 @@ export async function getStudentStatistics(
   const filterByRange = (range: DateRange) =>
     student.attendances
       .filter((a) => a.lesson.date >= range.from && a.lesson.date <= range.to)
-      .map((a) => ({ status: a.status as AttendanceStatusValue }));
+      .map((a) => ({
+        status: a.status as AttendanceStatusValue,
+        isExcused: a.isExcused,
+      }));
 
   const todayStats = calculateStatsFromRecords(filterByRange(todayRange));
   const weekStats = calculateStatsFromRecords(filterByRange(weekRange));
   const monthStats = calculateStatsFromRecords(filterByRange(monthRange));
   const allStats = calculateStatsFromRecords(
-    student.attendances.map((a) => ({ status: a.status as AttendanceStatusValue })),
+    student.attendances.map((a) => ({
+      status: a.status as AttendanceStatusValue,
+      isExcused: a.isExcused,
+    })),
   );
   const customStats = customRange
     ? calculateStatsFromRecords(filterByRange(customRange))
@@ -233,6 +307,18 @@ export async function getStudentStatistics(
     lessonNumber: a.lesson.lessonNumber,
     subject: a.lesson.subject,
     status: a.status as AttendanceStatusValue,
+    isExcused: a.isExcused,
+    certificateId: a.certificateId,
+    certificate: a.certificate
+      ? {
+          id: a.certificate.id,
+          type: a.certificate.type,
+          reason: a.certificate.reason,
+          dateFrom: formatDateOnly(a.certificate.dateFrom),
+          dateTo: formatDateOnly(a.certificate.dateTo),
+          documentNumber: a.certificate.documentNumber,
+        }
+      : null,
     missedHours: getMissedHoursForStatus(a.status as AttendanceStatusValue),
   }));
 
@@ -258,6 +344,20 @@ export async function getStudentStatistics(
     },
     history,
     absencesHistory,
+    certificates: certificates.map((c) => ({
+      id: c.id,
+      studentId: c.studentId,
+      dateFrom: formatDateOnly(c.dateFrom),
+      dateTo: formatDateOnly(c.dateTo),
+      reason: c.reason,
+      type: c.type,
+      documentNumber: c.documentNumber,
+      comment: c.comment,
+      hasPhoto: Boolean(c.photoMimeType),
+      photoMimeType: c.photoMimeType,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+    })),
   };
 }
 
@@ -280,7 +380,10 @@ export async function getPeriodStatistics(range: DateRange) {
   ]);
 
   const allRecords = lessons.flatMap((l) =>
-    l.attendances.map((a) => ({ status: a.status as AttendanceStatusValue })),
+    l.attendances.map((a) => ({
+      status: a.status as AttendanceStatusValue,
+      isExcused: a.isExcused,
+    })),
   );
   const overall = calculateStatsFromRecords(allRecords);
 
@@ -288,7 +391,10 @@ export async function getPeriodStatistics(range: DateRange) {
     const records = lessons.flatMap((l) =>
       l.attendances
         .filter((a) => a.studentId === student.id)
-        .map((a) => ({ status: a.status as AttendanceStatusValue })),
+        .map((a) => ({
+          status: a.status as AttendanceStatusValue,
+          isExcused: a.isExcused,
+        })),
     );
     return {
       studentId: student.id,

@@ -8,6 +8,7 @@ import { StudentDetailPage } from './pages/StudentDetailPage';
 import { SubjectsPage } from './pages/SubjectsPage';
 import { LessonsHistoryPage } from './pages/LessonsHistoryPage';
 import { SchedulePage } from './pages/SchedulePage';
+import { CertificatesPage } from './pages/CertificatesPage';
 
 export function App() {
   return (
@@ -20,6 +21,7 @@ export function App() {
             <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/students" element={<StudentsPage />} />
             <Route path="/students/:id" element={<StudentDetailPage />} />
+            <Route path="/certificates" element={<CertificatesPage />} />
             <Route path="/subjects" element={<SubjectsPage />} />
             <Route path="/history" element={<LessonsHistoryPage />} />
           </Routes>

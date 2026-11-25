@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   BookOpen,
   CheckSquare,
+  FileText,
   GraduationCap,
   History,
   LayoutDashboard,
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { to: '/attendance', label: 'Посещаемость', icon: CheckSquare },
   { to: '/schedule', label: 'Расписание', icon: Calendar },
   { to: '/students', label: 'Студенты', icon: Users },
+  { to: '/certificates', label: 'Справки', icon: FileText },
   { to: '/subjects', label: 'Предметы', icon: BookOpen },
   { to: '/history', label: 'История занятий', icon: History },
 ];
